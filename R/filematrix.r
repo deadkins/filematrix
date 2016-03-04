@@ -2,11 +2,6 @@ library(methods);
 
 ### split set of numbers into increasing sequences
 
-.index.splitter = function(i) {
-	parts = which(c(TRUE, diff(i)!=1,TRUE));
-	ind = list( start = i[parts[1:(length(parts)-1)]], len = diff(parts), ix = parts, n = length(parts)-1);
-	return(ind);
-}
 # Example
 # .index.splitter(c(1,2,3, 3,4,5, -3,-2,-1))
 # Returns:
@@ -16,11 +11,21 @@ library(methods);
 # $ix - start position in the input sequence, 1 4 7 10 
 # $n - number of sequences,                   3
 
-file.lock = function(fname = NULL) {
+.index.splitter = function(i) {
+	parts = which(c(TRUE, diff(i)!=1,TRUE));
+	ind = list( start = i[parts[1:(length(parts)-1)]], len = diff(parts), ix = parts, n = length(parts)-1);
+	return(ind);
+}
+
+### Exclusive lock on a file
+### Used to prevent simultaneous read/write requests to
+### the same hard drive.
+
+file.lock = function(fname = NULL, timeout = 300) {
 	if(is.character(fname)) {
 		library(RSQLite)
 		con <- dbConnect(SQLite(), dbname = fname)
-		dbGetQuery(con, 'PRAGMA busy_timeout = 10000000');
+		dbGetQuery(con, paste0('PRAGMA busy_timeout = ', timeout));
 		lock = function() {
 			dbGetQuery(con, 'BEGIN IMMEDIATE TRANSACTION')
 		}
@@ -33,9 +38,12 @@ file.lock = function(fname = NULL) {
 			lock();
 			expr
 		}
-		return( list(lock=lock, unlock=unlock, lockedrun = lockedrun ) );
+		close = function(){
+			dbDisconnect(con);
+		}
+		return( list(lock=lock, unlock=unlock, lockedrun = lockedrun, close = close ) );
 	} else {
-		return( list(lock=function(){}, unlock=function(){}, lockedrun = function(x){x}) );
+		return( list(lock=function(){}, unlock=function(){}, lockedrun = identity, close = function(){}) );
 	}
 }
 
@@ -58,11 +66,11 @@ setRefClass("filematrix",
 	methods = list(
 		# Set the caster function based on data "type"
 		setCaster = function() {
-			caster <<- switch(type,
-				double = as.double,
-				integer = as.integer,
-				logical = as.logical,
-				raw = as.raw,
+			.self$caster = switch(type,
+				double = function(x){ if(typeof(x) == "double"){return(x)} else {return(as.double(x))}},
+				integer =  function(x){ if(typeof(x) == "integer"){return(x)} else {return(as.integer(x))}},
+				logical = function(x){ if(typeof(x) == "logical"){return(x)} else {return(as.logical(x))}},
+				raw = function(x){ if(typeof(x) == "raw"){return(x)} else {return(as.raw(x))}},
 				stop("Unknown data type: ",type));
 		},
 		# Initialize all variables in the class. Called automatically upon creation.
@@ -78,12 +86,14 @@ setRefClass("filematrix",
 			.self$cnames = character();
 			.self$rnamefile = "";
 			.self$cnamefile = "";
+			.self$filelock = file.lock();
 		},
 		# Close the file matrix object. Access via close(fm)
 		close = function() {
 			if( length(.self$fid)>0 ) {
 				base::close.connection( .self$fid[[1]] );
 				.self$fid = list();
+				.self$filelock$close();
 			} else {
 				warning("Inactive filematrix object.");
 			}
@@ -95,21 +105,23 @@ setRefClass("filematrix",
 		},
 		# This method is called when the object is being printed.
 		show = function() {
-			if(length(fid)>0) {
-				cat(nr, "x", nc, "filematrix object", "\n");
+			if(length(.self$fid)>0) {
+				cat(sprintf("%0.f x %0.f filematrix object",nr,nc),"\n");
 			} else {
 				cat("Inactive filematrix object","\n");
 			}
 		},
 		# methods for reading from and writing to the descriptor file "info.filename"
 		loadInfo = function() {
-			info = readLines( .self$info.filename);
-			keep = grep(x=info, pattern="=", fixed=TRUE);
+			info = readLines( .self$info.filename );
+			keep = grep(x=info, pattern = "=", fixed=TRUE);
 			info = info[keep];
-			ss = strsplit(info, split="=");
+			ss = strsplit(info, split = "=");
 			lst = lapply(ss, "[[", 2);
 			names(lst) = sapply(ss, "[[", 1);
 			
+			if( !all(c("ncol","nrow","size","type") %in% names(lst)) )
+				stop(paste0('Malformed filematrix info file: ',.self$info.filename));
 			.self$nr = round(as.numeric(lst$nrow));
 			.self$nc = round(as.numeric(lst$ncol));
 			.self$size = as.integer(lst$size);
@@ -185,7 +197,7 @@ setRefClass("filematrix",
 			return(invisible(.self));
 		},
 		# File creation functions
-		create = function(filenamebase, nrow = 0, ncol = 1, type="double", size=NULL, lock=NULL) {
+		create = function(filenamebase, nrow = 0, ncol = 1, type = "double", size = NULL, lockfile = NULL) {
 			
 			filenamebase = gsub("\\.desc\\.txt$", "", filenamebase);
 			filenamebase = gsub("\\.bmat$", "", filenamebase);
@@ -193,14 +205,10 @@ setRefClass("filematrix",
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
-			if(!is.null(lock)) {
-				.self$filelock = lock;
-			} else {
-				.self$filelock = file.lock();
-			}
-			
+			.self$filelock = file.lock(lockfile);
+
 			if( !(type %in% c("double","integer","logical","raw")) ) {
-				stop("\"type\" must be either \"double\",\"integer\",\"logical\", or \"raw\"");
+				stop("Data type must be either \"double\",\"integer\",\"logical\", or \"raw\"");
 			}
 			if(is.null(size)) {
 				.self$size = switch(type,
@@ -226,7 +234,7 @@ setRefClass("filematrix",
 			if(nr*nc>0)
 				writeSeq(nr*nc, 0);
 		},
-		open = function(filenamebase, readonly = FALSE, lock=NULL) {
+		open = function(filenamebase, readonly = FALSE, lockfile = NULL) {
 			
 			filenamebase = gsub("\\.desc\\.txt$", "", filenamebase);
 			filenamebase = gsub("\\.bmat$", "", filenamebase);
@@ -234,11 +242,8 @@ setRefClass("filematrix",
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
-			if(!is.null(lock)) {
-				.self$filelock = lock;
-			} else {
-				.self$filelock = file.lock();
-			}
+			.self$filelock = file.lock(lockfile);
+			
 			loadInfo();
 
 			data.file.name = paste0(filenamebase, ".bmat");
@@ -248,14 +253,15 @@ setRefClass("filematrix",
 
 			.self$fid = list(fd);
 		},
-		createFromMatrix = function(filenamebase, mat, size=NULL, lock=NULL) {
-			mat = as.matrix(mat);
-			create(filenamebase=filenamebase, nrow=nrow(mat), ncol=ncol(mat), type=typeof(mat), size=size, lock=lock);
+		createFromMatrix = function(filenamebase, mat, size = NULL, lockfile = NULL) {
+			# mat = as.matrix(mat);
+			create(filenamebase=filenamebase, nrow=NROW(mat), ncol=NCOL(mat), type=typeof(mat), size=size, lockfile=lockfile);
 			setdimnames(dimnames(mat));
 			writeAll(mat);
 			return(invisible(.self));
 		},
-		# Data access routines. Access via fm[].
+		# Data access routines. 
+		# More conveniently accessed via fm[] interfacee.
 		# Arguments are assumed to be round (integers, possibly > 2^32).
 		# No check if the object is closed.
 		# Both are checked in fm[] interface.
@@ -265,7 +271,11 @@ setRefClass("filematrix",
 			stopifnot( start>=1 );
 			stopifnot( start+len-1 <= nr*nc );
 			seek(con=fid[[1]], where=(start-1)*size, rw="read");
-			if(((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) || ( len*as.numeric(size) >= 2^31)) {
+			# Reading data of non-naitive size is slow in R. (Why?)
+			# This is solved by reading RAW data and using readBin on memory vector.
+			# Reading long vectors is currently supported (as of R 3.2.2).
+			# Thus currently exclude condition: ( len*as.numeric(size) >= 2^31)
+			if(((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) ) {
 				filelock$lockedrun({
 					tmp = readBin(con=fid[[1]], n=len*size, what='raw');
 				});
@@ -283,44 +293,52 @@ setRefClass("filematrix",
 			stopifnot( start >= 1L );
 			stopifnot( start+length(value)-1 <= nr*nc );
 			seek(con=fid[[1]], where=(start-1L)*size, rw="write");
-			if(((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) || ( length(value)*as.numeric(size) >= 2^31)) {
-				if(length(value)*as.numeric(size) < 5e8) {
-					tmp = raw();
-					tmp = writeBin(con=tmp, object=caster(value), size=size, endian="little");
+			
+			# Writing data of non-naitive size is slow in R. (Why?)
+			# This is solved by writing RAW data after using writeBin to convert it into memory vector.
+			if( ((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) ) {
+				addwrite = function(value) {
+					tmp = writeBin(con=raw(), object=caster(value), size=size, endian="little");
 					filelock$lockedrun({
 						writeBin(con=fid[[1]], object=tmp);
 					});
-				} else {
-					step1 = 5e8/size;
-					mm = length(value);
-					nsteps = ceiling(mm/step1);
-					for( part in 1:nsteps ) { # part = 1
-						# cat( part, 'of', nsteps, '\n');
-						fr = (part-1)*step1 + 1;
-						to = min(part*step1, mm);
-						
-						tmp = raw();
-						tmp = writeBin(con=tmp, object=caster(value[fr:to]), size=size, endian="little");
-						filelock$lockedrun({
-							writeBin(con=fid[[1]], object=tmp);
-						})
-					}
-					rm(part, step1, mm, nsteps, fr, to);
 				}
-				rez = 
-				rm(tmp);
 			} else {
-				filelock$lockedrun({
-					writeBin(con=fid[[1]],  object=caster(value), size=size, endian="little");
-				})
+				addwrite = function(value) {
+					writeBin(con=fid[[1]], object=caster(value), size=size, endian="little");
+				}
 			}
-			flush(fid[[1]]);
+			
+			# Writing long vectors is currently NOT supported (as of R 3.2.2, 3.3.0).
+			# Thus write in pieces of 128 MB or less.
+			if(length(value)*as.numeric(size) < 134217728) {
+				addwrite(value);
+			} else {
+				step1 = 134217728 %/% size;
+				mm = length(value);
+				nsteps = ceiling(mm/step1);
+				for( part in 1:nsteps ) { # part = 1
+					# cat( part, 'of', nsteps, '\n');
+					fr = (part-1)*step1 + 1;
+					to = min(part*step1, mm);
+					
+					addwrite(value[fr:to]);
+				}
+				rm(part, step1, mm, nsteps, fr, to);
+			}
+			# Instead of flush:
+			filelock$lockedrun({
+				seek(con=fid[[1]], 0, rw="write");
+			});
 			return(invisible(.self));
 		},
 		# fm[,start:(start+num-1)]
 		readCols = function(start, num) {
 			rez = readSeq( (start-1)*nr+1, num*nr );
-			if((num > 1) | (nr < 2^31))
+			# Do not make a vector into a matrix
+			# Avoid errors caused by nrow >= 2^31 or ncol >= 2^31
+			# as such matrices are not supported
+			if((num > 1) && (nr > 1) && (nr < 2^31) && (num < 2^31))
 				dim(rez) = c(nr, num);
 			return(rez);
 		},
@@ -344,7 +362,7 @@ setRefClass("filematrix",
 		writeSubCol = function(i, j, value) {
 			stopifnot( i>=1  );
 			stopifnot( j>=1  );
-			stopifnot( i<=nr );
+			# stopifnot( i<=nr ); # Redundant
 			stopifnot( j<=nc );
 			stopifnot( i + length(value) - 1 <= nr );
 			writeSeq( (j-1)*nr+i, value);
@@ -362,15 +380,13 @@ setRefClass("filematrix",
 			return(invisible(.self));
 		},
 		appendColumns = function(mat) {
-			mat = as.matrix(mat);
-			oldn = .self$nc;
-			newn = oldn + ncol(mat);
 			if(.self$nr == 0)	{
-				.self$nr = nrow(mat);
-			} else {
-				stopifnot( .self$nr == nrow(mat) );
+				.self$nr = NROW(mat);
 			}
-			.self$nc = newn;
+			stopifnot( (length(mat) %% nr) == 0 );
+			naddcols = length(mat) %/% nr;
+			oldn = .self$nc;
+			.self$nc = oldn + naddcols;
 			saveInfo();
 			writeCols(oldn+1, mat);
 			return(invisible(.self));
