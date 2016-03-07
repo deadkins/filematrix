@@ -279,14 +279,16 @@ setRefClass("filematrix",
 				filelock$lockedrun({
 					tmp = readBin(con=fid[[1]], n=len*size, what='raw');
 				});
-				rez = readBin(con=tmp,         n=len, what=type, size=size, endian='little');
-				rm(tmp);
+				return(
+					readBin(con=tmp,         n=len, what=type, size=size, endian='little')
+				);
 			} else {
-				filelock$lockedrun({
-					rez = readBin(con=fid[[1]], n=len, what=type, size=size, endian="little");
-				})
+				return( 
+					filelock$lockedrun({
+						readBin(con=fid[[1]], n=len, what=type, size=size, endian="little");
+					})
+				);
 			}
-			return(rez);
 		},
 		# fm[start:(start+length(value)-1)] = value
 		writeSeq = function(start, value) {
@@ -525,7 +527,7 @@ setRefClass("filematrix",
 	if(nargs()==3 & !missing(i)) {
 		### checks and logical access
 		if( is.logical(i) ) {
-		stopifnot( length(i) == x$nr*x$nc );
+			stopifnot( length(i) == x$nr*x$nc );
 		 	i = which(i);
 		} else {
 			stopifnot( min(i) >= 1 );
@@ -566,12 +568,12 @@ setRefClass("filematrix",
 	### column access
 	if( missing(i) & !missing(j) ) {
 		stopifnot( length(j)*x$nr == length(value) );
-		dim(value) = c(x$nr, length(j));
 		ind = .index.splitter(j);
 		if(ind$n == 1) {
 			x$writeCols(ind$start, value);
 			return(x);
 		}
+		dim(value) = c(x$nr, length(j));
 		for(a in 1:ind$n) {
 			x$writeCols(ind$start[a], value[,ind$ix[a]:(ind$ix[a+1]-1)]);
 		}
