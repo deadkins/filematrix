@@ -2,6 +2,7 @@ n = 20;
 fm = fm.create(filenamebase = 'E:/test', n, n)
 mat = matrix(0, n, n);
 
+
 ### Fully indexed access
 
 k = 10;
@@ -20,6 +21,7 @@ for( test in 1:100 ) {
 }
 stopifnot( all( as.matrix(fm) == mat ) );
 
+
 ### All columns access
 
 k = 10;
@@ -36,6 +38,7 @@ for( test in 1:100 ) {
 	mat[rowset, ] = value;
 }
 stopifnot( all( as.matrix(fm) == mat ) );
+
 
 ### All rows access
 
@@ -54,6 +57,7 @@ for( test in 1:100 ) {
 }
 stopifnot( all( as.matrix(fm) == mat ) );
 
+
 ### Vector access
 
 k = 10;
@@ -71,7 +75,7 @@ for( test in 1:100 ) {
 }
 stopifnot( all( as.matrix(fm) == mat ) );
 
-fm$close.and.delete.files();
+fm$closeAndDeleteFiles();
 # 
 # 
 # a = 1:1e9;
