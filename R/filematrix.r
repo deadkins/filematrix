@@ -56,6 +56,7 @@ setRefClass("filematrix",
 		size = "integer",            # size of each matrix value in the file (1,2,4,8)
 		caster = "function",         # function transforming data into the matrix data type
 		info.filename = "character", # file name for file matrix description
+		data.filename = "character", # file name for file matrix data
 		rnames = "character",        # row names, access via rownames(fm)
 		cnames = "character",        # column names, access via colnames(fm)
 		rnamefile = "character",     # file with row names
@@ -63,15 +64,6 @@ setRefClass("filematrix",
 		filelock = "list"            # file lock mechanism ($lock, $unlock)
 	),
 	methods = list(
-		# Set the caster function based on data "type"
-		setCaster = function() {
-			.self$caster = switch(type,
-				double = function(x){ if(typeof(x) == "double"){return(x)} else {return(as.double(x))}},
-				integer =  function(x){ if(typeof(x) == "integer"){return(x)} else {return(as.integer(x))}},
-				logical = function(x){ if(typeof(x) == "logical"){return(x)} else {return(as.logical(x))}},
-				raw = function(x){ if(typeof(x) == "raw"){return(x)} else {return(as.raw(x))}},
-				stop("Unknown data type: ",type));
-		},
 		# Initialize all variables in the class. Called automatically upon creation.
 		initialize = function() {
 			.self$fid = list();
@@ -81,18 +73,32 @@ setRefClass("filematrix",
 			.self$size = 8L;
 			.self$setCaster();
 			.self$info.filename = "";
+			.self$data.filename = "";
 			.self$rnames = character();
 			.self$cnames = character();
 			.self$rnamefile = "";
 			.self$cnamefile = "";
 			.self$filelock = .file.lock();
 		},
+		# Set the caster function forcing input to the "type"
+		setCaster = function() {
+			.self$caster = switch(type,
+										 double = function(x){ if(typeof(x) == "double"){return(as.vector(x))} else {return(as.double(x))}},
+										 integer =  function(x){ if(typeof(x) == "integer"){return(as.vector(x))} else {return(as.integer(x))}},
+										 logical = function(x){ if(typeof(x) == "logical"){return(as.vector(x))} else {return(as.logical(x))}},
+										 raw = function(x){ if(typeof(x) == "raw"){return(as.vector(x))} else {return(as.raw(x))}},
+										 stop("Unknown data type: ",type));
+		},
+		# Is filematrix connected to any file?
+		isOpen = function() {
+			return( length(.self$fid)>0 );
+		},
 		# Close the file matrix object. Access via close(fm)
 		close = function() {
-			if( length(.self$fid)>0 ) {
-				filelock$lockedrun({
+			if( isOpen() ) {
+				# filelock$lockedrun({
 					base::close.connection( .self$fid[[1]] );
-				});
+				# });
 				.self$fid = list();
 				.self$filelock$close();
 			} else {
@@ -100,13 +106,9 @@ setRefClass("filematrix",
 			}
 			initialize();
 		},
-		# Is open?
-		isOpen = function() {
-			return( length(.self$fid)>0 );
-		},
 		# This method is called when the object is being printed.
 		show = function() {
-			if(length(.self$fid)>0) {
+			if( isOpen() ) {
 				cat(sprintf("%0.f x %0.f filematrix object",nr,nc),"\n");
 			} else {
 				cat("Inactive filematrix object","\n");
@@ -115,7 +117,7 @@ setRefClass("filematrix",
 		# methods for reading from and writing to the descriptor file "info.filename"
 		loadInfo = function() {
 			info = readLines( .self$info.filename );
-			keep = grep(x=info, pattern = "=", fixed=TRUE);
+			keep = grep(x = info, pattern = "=", fixed = TRUE);
 			info = info[keep];
 			ss = strsplit(info, split = "=");
 			lst = lapply(ss, "[[", 2);
@@ -173,7 +175,7 @@ setRefClass("filematrix",
 		setrownames = function(rn) {
 			if(length(rn)>0) {
 				.self$rnames = rn;
-				writeLines( text=rnames, con=rnamefile);
+				writeLines( con = rnamefile, text = rnames);
 			} else {
 				if(file.exists(rnamefile))
 					file.remove(rnamefile);
@@ -184,7 +186,7 @@ setRefClass("filematrix",
 		setcolnames = function(cn) {
 			if(length(cn)>0) {
 				.self$cnames = cn;
-				writeLines( text=cnames, con=cnamefile);
+				writeLines( con = cnamefile, text = cnames);
 			} else {
 				if(file.exists(cnamefile))
 					file.remove(cnamefile);
@@ -197,15 +199,30 @@ setRefClass("filematrix",
 			setcolnames(nms[[2]]);
 			return(invisible(.self));
 		},
+		# Delete files
+		closeAndDeleteFiles = function() {
+			if(!isOpen())
+				stop('Filematrix not open, cannot close and delete');
+
+			.self$setcolnames(cn = NULL);
+			.self$setrownames(rn = NULL);
+			
+			file1 = .self$info.filename;
+			file2 = .self$data.filename;
+			.self$close();
+			file.remove(file1);
+			file.remove(file2);
+		},
 		# File creation functions
 		create = function(filenamebase, nrow = 0, ncol = 1, type = "double", size = NULL, lockfile = NULL) {
 			
-			filenamebase = gsub("\\.desc\\.txt$", "", filenamebase);
-			filenamebase = gsub("\\.bmat$", "", filenamebase);
-			filenamebase = normalizePath(filenamebase, mustWork=FALSE);
+			filenamebase = gsub(pattern = "\\.desc\\.txt$", replacement = "", x = filenamebase);
+			filenamebase = gsub(pattern = "\\.bmat$",       replacement = "", x = filenamebase);
+			filenamebase = normalizePath(path = filenamebase, mustWork = FALSE);
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
+			.self$data.filename = paste0(filenamebase, ".bmat");
 			.self$filelock = .file.lock(lockfile);
 
 			if( !(type %in% c("double","integer","logical","raw")) ) {
@@ -225,16 +242,15 @@ setRefClass("filematrix",
 			.self$nc = round(as.double(ncol));
 			.self$nr = round(as.double(nrow));
 			.self$type = type;
-			setCaster();
+			.self$setCaster();
 			
-			saveInfo();
+			.self$saveInfo();
 			
-			data.file.name = paste0(filenamebase,".bmat");
 			filelock$lockedrun({
-				fd = file(description=data.file.name, open="w+b");
+				fd = file(description = .self$data.filename, open = "w+b");
 			});
 			.self$fid = list(fd);
-			if(nr*nc>0)
+			if( nr*nc>0 )
 				writeSeq(nr*nc, 0);
 		},
 		open = function(filenamebase, readonly = FALSE, lockfile = NULL) {
@@ -245,15 +261,15 @@ setRefClass("filematrix",
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
+			.self$data.filename = paste0(filenamebase, ".bmat");
 			.self$filelock = .file.lock(lockfile);
 			
 			loadInfo();
 
-			data.file.name = paste0(filenamebase, ".bmat");
-# 			stopifnot( file.info(data.file.name)$size == nr*nc*size );
-			stopifnot( file.info(data.file.name)$size >= nr*nc*size );
+			# stopifnot( file.info(data.file.name)$size == nr*nc*size );
+			# stopifnot( file.info(data.file.name)$size >= nr*nc*size );
 			filelock$lockedrun({
-				fd = file(description=data.file.name, open=if(readonly){"rb"}else{"r+b"});
+				fd = file(description = .self$data.filename, open = if(readonly){"rb"}else{"r+b"});
 			});
 
 			.self$fid = list(fd);
@@ -598,11 +614,16 @@ setRefClass("filematrix",
 	
 	### full access
 	if( !missing(i) ) {
-		stopifnot( all(diff(i)==1L) );
+		# stopifnot( all(diff(i)==1L) );
 		stopifnot( length(i)*length(j) == length(value) );
 		dim(value) = c(length(i),length(j));
-		for(a in seq_along(j)) {
-			x$writeSubCol(i[1], j[a], value[,a]);
+		
+		ind = .index.splitter(i);
+		for(aj in seq_along(j)) { # a = 1
+			for(ai in 1:ind$n) {
+				x$writeSubCol(ind$start[ai], j[aj], value[ind$ix[ai]:(ind$ix[ai+1]-1),aj]);
+			}
+			# x$writeSubCol(i[1], j[a], value[,a]);
 		}
 		return(x);	
 	}
@@ -615,29 +636,30 @@ setRefClass("filematrix",
 # Create new, erase if exists
 fm.create = function(filenamebase, nrow = 0, ncol = 1, type="double", size=NULL, lockfile=NULL){
 	rez = new("filematrix");
-	rez$create(filenamebase=filenamebase, nrow=nrow, ncol = ncol, type=type, size=size, lockfile = lockfile);
+	rez$create(filenamebase = filenamebase, nrow = nrow, ncol = ncol, type = type, size = size, lockfile = lockfile);
 	return(rez);
 }
 
 # From existing matrix
 fm.create.from.matrix = function(filenamebase, mat, size=NULL, lockfile=NULL) {
 	rez = new("filematrix");
-	rez$createFromMatrix(filenamebase=filenamebase, mat=mat, size=size, lockfile=lockfile);
+	rez$createFromMatrix(filenamebase = filenamebase, mat = mat, size = size, lockfile = lockfile);
 	return(rez);
 }
 
 # Open existing file matrix
 fm.open = function(filenamebase, readonly = FALSE, lockfile=NULL) {
 	rez = new("filematrix");
-	rez$open(filenamebase=filenamebase, readonly, lockfile=lockfile);
+	rez$open(filenamebase = filenamebase, readonly = readonly, lockfile = lockfile);
 	return(rez);
 }
 
 # Open and read the the whole matrix in memory.
 fm.load = function(filenamebase, lockfile=NULL) {
-	fm = fm.open(filenamebase=filenamebase, readonly = TRUE, lockfile=lockfile);
+	fm = fm.open(filenamebase = filenamebase, readonly = TRUE, lockfile = lockfile);
 	mat = as.matrix(fm);
-	dimnames(mat) = dimnames(fm);
+	if( is.matrix(mat) )
+		dimnames(mat) = dimnames(fm);
 	fm$close();
 	return(mat);
 }
@@ -741,15 +763,14 @@ setGeneric("close")#, def = function(con){standardGeneric("close")})
 setMethod("close", signature(con="filematrix"), function(con) con$close());
 
 setGeneric("as.matrix")
-setMethod("as.matrix", signature(x="filematrix"), function(x) x$readAll());
+setMethod("as.matrix",  signature(x="filematrix"), function(x) x$readAll());
 
 setGeneric("dim");
-setMethod("dim", signature(x="filematrix"), function(x) c(x$nr, x$nc));
+setMethod("dim",        signature(x="filematrix"), function(x) c(x$nr, x$nc));
 # dim.filematrix = function(x) as.integer(c(x$nr, x$nc));
 
 # setGeneric("dim<-",def = function(x,value){standardGeneric("dim<-")});
-setMethod("dim<-", signature(x="filematrix", value = "ANY"),	
-	function(x, value) {
+setMethod("dim<-",      signature(x="filematrix", value = "ANY"),	function(x, value) {
 		x$nr = value[1];
 		x$nc = value[2];
 		x$saveInfo();
@@ -758,22 +779,22 @@ setMethod("dim<-", signature(x="filematrix", value = "ANY"),
 );
 
 setGeneric("length");
-setMethod("length", signature(x="filematrix"),	function(x) x$nr*x$nc);
+setMethod("length",     signature(x="filematrix"),	function(x) x$nr*x$nc);
 
 setGeneric("dimnames");
-setMethod("dimnames", signature(x="filematrix"),	function(x) x$getdimnames());
+setMethod("dimnames",   signature(x="filematrix"),	function(x) x$getdimnames());
 
 setGeneric("dimnames<-");
 setMethod("dimnames<-", signature(x="filematrix", value = "ANY"), function(x, value) x$setdimnames(value));
 
 setGeneric("rownames");
-setMethod("rownames", signature(x="filematrix"),	function(x) x$getrownames());
+setMethod("rownames",   signature(x="filematrix"),	function(x) x$getrownames());
 
 setGeneric("rownames<-");
 setMethod("rownames<-", signature(x="filematrix", value = "ANY"), function(x, value) x$setrownames(value));
 
 setGeneric("colnames");
-setMethod("colnames", signature(x="filematrix"),	function(x) x$getcolnames());
+setMethod("colnames",   signature(x="filematrix"),	function(x) x$getcolnames());
 
 setGeneric("colnames<-");
 setMethod("colnames<-", signature(x="filematrix", value = "ANY"), function(x, value) x$setcolnames(value));
