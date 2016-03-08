@@ -195,8 +195,10 @@ setRefClass("filematrix",
 			return(invisible(.self));
 		},
 		setdimnames = function(nms) {
-			setrownames(nms[[1]]);
-			setcolnames(nms[[2]]);
+			if(is.list(nms)) {
+				setrownames(nms[[1]]);
+				setcolnames(nms[[2]]);
+			}
 			return(invisible(.self));
 		},
 		# Delete files
@@ -212,6 +214,7 @@ setRefClass("filematrix",
 			.self$close();
 			file.remove(file1);
 			file.remove(file2);
+			return(invisible(.self));
 		},
 		# File creation functions
 		create = function(filenamebase, nrow = 0, ncol = 1, type = "double", size = NULL, lockfile = NULL) {
@@ -255,9 +258,9 @@ setRefClass("filematrix",
 		},
 		open = function(filenamebase, readonly = FALSE, lockfile = NULL) {
 			
-			filenamebase = gsub("\\.desc\\.txt$", "", filenamebase);
-			filenamebase = gsub("\\.bmat$", "", filenamebase);
-			filenamebase = normalizePath(filenamebase, mustWork=FALSE);
+			filenamebase = gsub(pattern = "\\.desc\\.txt$", replacement = "", x = filenamebase);
+			filenamebase = gsub(pattern = "\\.bmat$",       replacement = "", x = filenamebase);
+			filenamebase = normalizePath(path = filenamebase, mustWork = FALSE);
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
@@ -292,23 +295,23 @@ setRefClass("filematrix",
 			stopifnot( start>=1 );
 			stopifnot( start+len-1 <= nr*nc );
 			# filelock$lockedrun({
-				seek(con=fid[[1]], where=(start-1)*size, rw="read");
+				seek(con = fid[[1]], where = (start-1)*size, rw = "read");
 			# });
 			# Reading data of non-naitive size is slow in R. (Why?)
 			# This is solved by reading RAW data and using readBin on memory vector.
 			# Reading long vectors is currently supported (as of R 3.2.2).
 			# Thus currently exclude condition: ( len*as.numeric(size) >= 2^31)
-			if(((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) ) {
+			if( ((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) ) {
 				filelock$lockedrun({
-					tmp = readBin(con=fid[[1]], n=len*size, what='raw');
+					tmp = readBin(con = fid[[1]], n = len*size, what = 'raw');
 				});
 				return(
-					readBin(con=tmp,         n=len, what=type, size=size, endian='little')
+					readBin(con = tmp,         n = len, what = type, size = size, endian = 'little')
 				);
 			} else {
 				return( 
 					filelock$lockedrun({
-						readBin(con=fid[[1]], n=len, what=type, size=size, endian="little");
+						readBin(con = fid[[1]], n = len, what = type, size = size, endian = "little");
 					})
 				);
 			}
@@ -318,22 +321,22 @@ setRefClass("filematrix",
 			stopifnot( start >= 1L );
 			stopifnot( start+length(value)-1 <= nr*nc );
 			# filelock$lockedrun({
-				seek(con=fid[[1]], where=(start-1L)*size, rw="write");
+				seek(con = fid[[1]], where = (start-1L)*size, rw = "write");
 			# });
 			
 			# Writing data of non-naitive size is slow in R. (Why?)
 			# This is solved by writing RAW data after using writeBin to convert it into memory vector.
 			if( ((size!=8)&&(type=='double')) || ((size!=4)&&(type=='integer')) ) {
 				addwrite = function(value) {
-					tmp = writeBin(con=raw(), object=caster(value), size=size, endian="little");
+					tmp = writeBin(con = raw(), object = caster(value), size = size, endian = "little");
 					filelock$lockedrun({
-						writeBin(con=fid[[1]], object=tmp);
+						writeBin(con = fid[[1]], object = tmp);
 					});
 				}
 			} else {
 				addwrite = function(value) {
 					filelock$lockedrun({
-						writeBin(con=fid[[1]], object=caster(value), size=size, endian="little");
+						writeBin(con = fid[[1]], object = caster(value), size = size, endian = "little");
 					});
 				}
 			}
@@ -357,7 +360,7 @@ setRefClass("filematrix",
 			}
 			# Instead of flush:
 			filelock$lockedrun({
-				seek(con=fid[[1]], 0, rw="write");
+				seek(con = fid[[1]], where = 0, rw = "write");
 			});
 			return(invisible(.self));
 		},
@@ -367,14 +370,15 @@ setRefClass("filematrix",
 			# Do not make a vector into a matrix
 			# Avoid errors caused by nrow >= 2^31 or ncol >= 2^31
 			# as such matrices are not supported
-			if((num > 1) && (nr > 1) && (nr < 2^31) && (num < 2^31))
+			# excluded: (num > 1) && (nr > 1) && 
+			if((nr < 2^31) && (num < 2^31))
 				dim(rez) = c(nr, num);
 			return(rez);
 		},
 		# fm[,start:(start+ncol(value)-1)] = value
 		writeCols = function(start, value) {
 			stopifnot( (length(value)%%nr)==0 );
-			writeSeq(	(start-1)*nr+1, value);
+			writeSeq( (start-1)*nr+1, value);
 			return(invisible(.self));
 		},
 		# fm[i, j:(j+num-1)]
@@ -399,8 +403,7 @@ setRefClass("filematrix",
 		},
 		# fm[]
 		readAll = function() {
-			rez = readCols(1, nc);
-			return(rez);
+			return(readCols(1, nc));
 		},
 		# fm[] = value
 		writeAll = function(value) {
@@ -408,34 +411,35 @@ setRefClass("filematrix",
 			writeSeq(1, value);
 			return(invisible(.self));
 		},
+		# Append column(s) by expanding the file
 		appendColumns = function(mat) {
 			if(.self$nr == 0)	{
 				.self$nr = NROW(mat);
 			}
 			stopifnot( (length(mat) %% nr) == 0 );
 			naddcols = length(mat) %/% nr;
-			oldn = .self$nc;
-			.self$nc = oldn + naddcols;
-			saveInfo();
-			writeCols(oldn+1, mat);
+			oldncols = .self$nc;
+			.self$nc = oldncols + naddcols;
+			.self$saveInfo();
+			writeCols(oldncols+1, mat);
 			return(invisible(.self));
 		}
 	)
 )
 
-### Accessing as a usual matrix 
+### Accessing as a usual R matrix 
 
 ### Reading via vector or matrix interface.
 "[.filematrix" = function(x, i, j) {
 	# Basic checks
 	if( !x$isOpen() )
-		stop( "File matrix is not open");
+		stop( "File matrix is not active");
 	if( !missing(i) )
-		if( !is.numeric(i) )
-			i = round(i);
+		if( is.double(i) )
+			i = floor(i);
 	if( !missing(j) )
-		if( !is.numeric(j) )
-			i = round(j);
+		if( is.double(j) )
+			j = floor(j);
 	
 	### full matrix access
 	if( missing(i) & missing(j) ) {
@@ -456,8 +460,7 @@ setRefClass("filematrix",
 		
 		ind = .index.splitter(i);
 		if(ind$n == 1) {
-			rez = x$readSeq(ind$start, ind$len);
-			return(rez);
+			return(x$readSeq(ind$start, ind$len));
 		}
 		rez = vector(x$type, length(i));
 		for(a in 1:ind$n) {
@@ -491,13 +494,12 @@ setRefClass("filematrix",
 	if( missing(i) & !missing(j) ) {
 		ind = .index.splitter(j);
 		if(ind$n == 1) {
-			rez = x$readCols(ind$start, ind$len);
-			return(rez);
+			return(x$readCols(ind$start, ind$len));
 		}
 		rez = vector(x$type, length(j)*x$nr);
 		dim(rez) = c(x$nr, length(j));
 		for(a in 1:ind$n) {
-			rez[,ind$ix[a]:(ind$ix[a+1]-1)] = 
+			rez[, ind$ix[a]:(ind$ix[a+1]-1) ] = 
 					x$readCols(ind$start[a], ind$len[a]);
 		}
 		return(rez);			
@@ -520,7 +522,7 @@ setRefClass("filematrix",
 		} else {
 			low = min(i);
 			len = max(i) - low + 1;
-			inew = i-low+1;
+			inew = i+(1-low);
 			for(a in seq_along(j)) {
 				vec = x$readSubCol(low, j[a], len);
 				rez[,a] = vec[inew];
@@ -528,7 +530,7 @@ setRefClass("filematrix",
 			return(rez);
 		}
 	}
-	stop("What??");
+	stop("What123??");
 }
 
 ### Writing via vector or matrix interface.
@@ -537,11 +539,11 @@ setRefClass("filematrix",
 	if( !x$isOpen() )
 		stop( "File matrix is not open");
 	if( !missing(i) )
-		if( !is.numeric(i) )
-			i = round(i);
+		if( is.double(i) )
+			i = floor(i);
 	if( !missing(j) )
-		if( !is.numeric(j) )
-			i = round(j);
+		if( is.double(j) )
+			j = floor(j);
 	
 	### full matrix access
 	if( missing(i) & missing(j) ) {
