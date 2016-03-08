@@ -21,7 +21,7 @@ library(methods);
 ### Used to prevent simultaneous read/write requests to
 ### the same hard drive.
 
-file.lock = function(fname = NULL, timeout = 300) {
+.file.lock = function(fname = NULL, timeout = 3600000) {
 	if(is.character(fname)) {
 		library(RSQLite)
 		con <- dbConnect(SQLite(), dbname = fname)
@@ -32,8 +32,7 @@ file.lock = function(fname = NULL, timeout = 300) {
 		unlock = function() {
 			dbGetQuery(con, 'COMMIT TRANSACTION')
 		}
-		lockedrun = function(expr) 
-		{
+		lockedrun = function(expr) {
 			on.exit(unlock())
 			lock();
 			expr
@@ -86,12 +85,14 @@ setRefClass("filematrix",
 			.self$cnames = character();
 			.self$rnamefile = "";
 			.self$cnamefile = "";
-			.self$filelock = file.lock();
+			.self$filelock = .file.lock();
 		},
 		# Close the file matrix object. Access via close(fm)
 		close = function() {
 			if( length(.self$fid)>0 ) {
-				base::close.connection( .self$fid[[1]] );
+				filelock$lockedrun({
+					base::close.connection( .self$fid[[1]] );
+				});
 				.self$fid = list();
 				.self$filelock$close();
 			} else {
@@ -205,7 +206,7 @@ setRefClass("filematrix",
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
-			.self$filelock = file.lock(lockfile);
+			.self$filelock = .file.lock(lockfile);
 
 			if( !(type %in% c("double","integer","logical","raw")) ) {
 				stop("Data type must be either \"double\",\"integer\",\"logical\", or \"raw\"");
@@ -229,7 +230,9 @@ setRefClass("filematrix",
 			saveInfo();
 			
 			data.file.name = paste0(filenamebase,".bmat");
-			fd = file(description=data.file.name, open="w+b");
+			filelock$lockedrun({
+				fd = file(description=data.file.name, open="w+b");
+			});
 			.self$fid = list(fd);
 			if(nr*nc>0)
 				writeSeq(nr*nc, 0);
@@ -242,14 +245,16 @@ setRefClass("filematrix",
 			.self$rnamefile =     paste0(filenamebase, ".nmsrow.txt");
 			.self$cnamefile =     paste0(filenamebase, ".nmscol.txt");
 			.self$info.filename = paste0(filenamebase, ".desc.txt");
-			.self$filelock = file.lock(lockfile);
+			.self$filelock = .file.lock(lockfile);
 			
 			loadInfo();
 
 			data.file.name = paste0(filenamebase, ".bmat");
 # 			stopifnot( file.info(data.file.name)$size == nr*nc*size );
 			stopifnot( file.info(data.file.name)$size >= nr*nc*size );
-			fd = file(description=data.file.name, open=if(readonly){"rb"}else{"r+b"});
+			filelock$lockedrun({
+				fd = file(description=data.file.name, open=if(readonly){"rb"}else{"r+b"});
+			});
 
 			.self$fid = list(fd);
 		},
@@ -270,7 +275,9 @@ setRefClass("filematrix",
 		readSeq = function(start, len) {
 			stopifnot( start>=1 );
 			stopifnot( start+len-1 <= nr*nc );
-			seek(con=fid[[1]], where=(start-1)*size, rw="read");
+			# filelock$lockedrun({
+				seek(con=fid[[1]], where=(start-1)*size, rw="read");
+			# });
 			# Reading data of non-naitive size is slow in R. (Why?)
 			# This is solved by reading RAW data and using readBin on memory vector.
 			# Reading long vectors is currently supported (as of R 3.2.2).
@@ -294,7 +301,9 @@ setRefClass("filematrix",
 		writeSeq = function(start, value) {
 			stopifnot( start >= 1L );
 			stopifnot( start+length(value)-1 <= nr*nc );
-			seek(con=fid[[1]], where=(start-1L)*size, rw="write");
+			# filelock$lockedrun({
+				seek(con=fid[[1]], where=(start-1L)*size, rw="write");
+			# });
 			
 			# Writing data of non-naitive size is slow in R. (Why?)
 			# This is solved by writing RAW data after using writeBin to convert it into memory vector.
@@ -307,7 +316,9 @@ setRefClass("filematrix",
 				}
 			} else {
 				addwrite = function(value) {
-					writeBin(con=fid[[1]], object=caster(value), size=size, endian="little");
+					filelock$lockedrun({
+						writeBin(con=fid[[1]], object=caster(value), size=size, endian="little");
+					});
 				}
 			}
 			
@@ -602,29 +613,29 @@ setRefClass("filematrix",
 ### Creators of filematrix objects
 
 # Create new, erase if exists
-fm.create = function(filenamebase, nrow = 0, ncol = 1, type="double", size=NULL, lock=NULL){
+fm.create = function(filenamebase, nrow = 0, ncol = 1, type="double", size=NULL, lockfile=NULL){
 	rez = new("filematrix");
-	rez$create(filenamebase=filenamebase, nrow=nrow, ncol = ncol, type=type, size=size, lock=lock);
+	rez$create(filenamebase=filenamebase, nrow=nrow, ncol = ncol, type=type, size=size, lockfile = lockfile);
 	return(rez);
 }
 
 # From existing matrix
-fm.create.from.matrix = function(filenamebase, mat, size=NULL, lock=NULL) {
+fm.create.from.matrix = function(filenamebase, mat, size=NULL, lockfile=NULL) {
 	rez = new("filematrix");
-	rez$createFromMatrix(filenamebase=filenamebase, mat=mat, size=size, lock=lock);
+	rez$createFromMatrix(filenamebase=filenamebase, mat=mat, size=size, lockfile=lockfile);
 	return(rez);
 }
 
 # Open existing file matrix
-fm.open = function(filenamebase, readonly = FALSE, lock=NULL) {
+fm.open = function(filenamebase, readonly = FALSE, lockfile=NULL) {
 	rez = new("filematrix");
-	rez$open(filenamebase=filenamebase, readonly, lock=lock);
+	rez$open(filenamebase=filenamebase, readonly, lockfile=lockfile);
 	return(rez);
 }
 
 # Open and read the the whole matrix in memory.
-fm.load = function(filenamebase, lock=NULL) {
-	fm = fm.open(filenamebase=filenamebase, readonly = TRUE, lock=lock);
+fm.load = function(filenamebase, lockfile=NULL) {
+	fm = fm.open(filenamebase=filenamebase, readonly = TRUE, lockfile=lockfile);
 	mat = as.matrix(fm);
 	dimnames(mat) = dimnames(fm);
 	fm$close();
