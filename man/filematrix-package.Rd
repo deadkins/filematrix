@@ -12,8 +12,8 @@
 	\tabular{ll}{
 		Package: \tab filematrix \cr
 		Type: \tab Package \cr
-		Version: \tab 1.0 \cr
-		Date: \tab 2015-06-09 \cr
+		Version: \tab 1.1 \cr
+		Date: \tab 2016-03-17 \cr
 		License: \tab LGPL-3 \cr
 		Depends: \tab methods \cr
 	}
