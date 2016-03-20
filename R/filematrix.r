@@ -23,7 +23,7 @@ library(methods);
 
 .file.lock = function(fname = NULL, timeout = 3600000) {
 	if(is.character(fname)) {
-		library(RSQLite)
+		# library(RSQLite)
 		con <- dbConnect(SQLite(), dbname = fname)
 		dbGetQuery(con, paste0('PRAGMA busy_timeout = ', timeout));
 		lock = function() {
@@ -109,7 +109,7 @@ setRefClass("filematrix",
 		# This method is called when the object is being printed.
 		show = function() {
 			if( isOpen() ) {
-				cat(sprintf("%0.f x %0.f filematrix object",nr,nc),"\n");
+				cat(sprintf("%0.f x %0.f filematrix with %d byte '%s' elements",nr,nc,size,type),"\n");
 			} else {
 				cat("Inactive filematrix object","\n");
 			}
@@ -636,28 +636,28 @@ setRefClass("filematrix",
 ### Creators of filematrix objects
 
 # Create new, erase if exists
-fm.create = function(filenamebase, nrow = 0, ncol = 1, type="double", size=NULL, lockfile=NULL){
+fm.create = function(filenamebase, nrow = 0, ncol = 1, type = "double", size = NULL, lockfile = NULL){
 	rez = new("filematrix");
 	rez$create(filenamebase = filenamebase, nrow = nrow, ncol = ncol, type = type, size = size, lockfile = lockfile);
 	return(rez);
 }
 
 # From existing matrix
-fm.create.from.matrix = function(filenamebase, mat, size=NULL, lockfile=NULL) {
+fm.create.from.matrix = function(filenamebase, mat, size = NULL, lockfile = NULL) {
 	rez = new("filematrix");
 	rez$createFromMatrix(filenamebase = filenamebase, mat = mat, size = size, lockfile = lockfile);
 	return(rez);
 }
 
 # Open existing file matrix
-fm.open = function(filenamebase, readonly = FALSE, lockfile=NULL) {
+fm.open = function(filenamebase, readonly = FALSE, lockfile = NULL) {
 	rez = new("filematrix");
 	rez$open(filenamebase = filenamebase, readonly = readonly, lockfile = lockfile);
 	return(rez);
 }
 
 # Open and read the the whole matrix in memory.
-fm.load = function(filenamebase, lockfile=NULL) {
+fm.load = function(filenamebase, lockfile = NULL) {
 	fm = fm.open(filenamebase = filenamebase, readonly = TRUE, lockfile = lockfile);
 	mat = as.matrix(fm);
 	if( is.matrix(mat) )
@@ -800,5 +800,8 @@ setMethod("colnames",   signature(x="filematrix"),	function(x) x$getcolnames());
 
 setGeneric("colnames<-");
 setMethod("colnames<-", signature(x="filematrix", value = "ANY"), function(x, value) x$setcolnames(value));
+
+closeAndDeleteFiles = function(con){ con$closeAndDeleteFiles() };
+
 
 
