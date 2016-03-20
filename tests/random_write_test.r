@@ -3,6 +3,9 @@ fm = fm.create(filenamebase = 'E:/test', n, n)
 mat = matrix(0, n, n);
 
 
+rownames(fm) = as.character(1:nrow(fm));
+colnames(fm) = as.character(1:ncol(fm));
+
 ### Fully indexed access
 
 k = 10;
