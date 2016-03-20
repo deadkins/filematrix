@@ -1,4 +1,6 @@
-importFrom(methods, setRefClass)
+importFrom("methods", "setRefClass", "new")
+importFrom("RSQLite", "SQLite", "dbConnect", "dbGetQuery", "dbDisconnect")
+importFrom("utils", "flush.console", "tail")
 exportPattern("^[[:alpha:]]+")
 exportMethods(
     "as.matrix",
