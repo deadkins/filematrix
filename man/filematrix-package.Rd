@@ -13,7 +13,7 @@
 		Package: \tab filematrix \cr
 		Type: \tab Package \cr
 		Version: \tab 1.1 \cr
-		Date: \tab 2016-03-17 \cr
+		Date: \tab 2016-03-21 \cr
 		License: \tab LGPL-3 \cr
 		Depends: \tab methods \cr
 	}
