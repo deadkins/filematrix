@@ -10,6 +10,8 @@ Description: Interface for working with large matrices stored in files, not in c
      Access to parts of the matrix is done by indexing, exactly as with usual R matrices.
      Supports very large matrices (tested on multi-terabyte matrices), allowing for more than 2^32 rows or columns.
      Cross-platform as the package has R code only, no C/C++.
+BugReports: https://github.com/andreyshabalin/filematrix/issues
+URL: https://github.com/andreyshabalin/filematrix
 License: LGPL-3
 Depends: methods, RSQLite
 VignetteBuilder: knitr
