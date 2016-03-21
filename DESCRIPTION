@@ -2,14 +2,15 @@ Package: filematrix
 Type: Package
 Title: File-Backed Matrix Class with Convenient Read and Write Access
 Version: 1.1
-Date: 2016-03-17
+Date: 2016-03-21
 Author: Andrey Shabalin
 Maintainer: Andrey Shabalin <ashabalin@vcu.edu>
 Description: Interface for working with large matrices stored in files, not in computer memory.
-     Supports multiple data types (double, integer, logical and raw) of different sizes (e.g. 4, 2, or 1 byte integers).
+     Supports multiple data types (double, integer, logical and raw) of different sizes (e.g. 8 and 4 byte real values).
      Access to parts of the matrix is done by indexing, exactly as with usual R matrices.
-     Supports very large matrices (tested on 1 terabyte matrix), allowing for more than 2^32 rows or columns.
+     Supports very large matrices (tested on multi-terabyte matrices), allowing for more than 2^32 rows or columns.
      Cross-platform as the package has R code only, no C/C++.
 License: LGPL-3
 Depends: methods, RSQLite
-
+VignetteBuilder: knitr
+Suggests: knitr
