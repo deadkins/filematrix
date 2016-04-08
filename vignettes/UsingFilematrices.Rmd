@@ -2,7 +2,9 @@
 title: "Filematrix overview"
 author: "Andrey Shabalin"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
+output: 
+  html_document:
+    toc: true # table of content true
 vignette: >
   %\VignetteIndexEntry{Filematrix overview}
   %\VignetteEngine{knitr::rmarkdown}
