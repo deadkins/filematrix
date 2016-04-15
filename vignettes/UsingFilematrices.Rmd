@@ -1,6 +1,6 @@
 ---
 title: "Filematrix overview"
-author: "Andrey Shabalin, AAAAAAAAAAAAAAHHHHHH"
+author: "Andrey Shabalin"
 date: "`r Sys.Date()`"
 output: 
   html_document:
@@ -11,7 +11,8 @@ vignette: >
   %\VignetteEncoding{UTF-8}
 ---
 
-Using the class `filematrix` one can create and access large matrices stored in files, not computer memory.
+
+Using the object class `filematrix` one can create and access large matrices stored in files, not computer memory.
 Filematrices can be as large as the storage allows. The package has been tested on matrices several terabytes in size.
 
 
@@ -24,11 +25,11 @@ suppressPackageStartupMessages( library(filematrix) )
 fm = fm.create(filenamebase = 'fmatrix', nrow = 1000, ncol = 1000, type = 'double')
 ```
 
-The code above creates two files: `fmatrix.bmat` which stores the filematrix values and `fmatrix.desc.txt` which stores the filematrix information, such as filematrix dimensions, data type, and data type size.
+The code above creates two files: `fmatrix.bmat` which stores the filematrix values, and `fmatrix.desc.txt` which stores the filematrix information, such as filematrix dimensions, data type, and data type size.
 
 ### Reading from and writing to a filematrix
 
-The elements of a filematrix can be read and changed using the same syntaxis as used for regular R matrices.
+The elements of a filematrix can be read and changed using the same syntax as is used for regular R matrices.
 Any changes to a filematrix are **immediately** written to the `.bmat` file.
 
 
@@ -38,12 +39,13 @@ fm[1:4, 1:3]
 colSums(fm[,1:4])
 ```
 
-Elements of a filematrix can also be accessed as elements of a vector. Note that `fm` has 1000 rows, so `fm[1,2]` accesses the same as `fm[1001]`.
+Elements of a filematrix can also be accessed as elements of a vector (in which elements proceed sequentially down columns stacked 1:n). Thus, as `fm` has 1000 rows, `fm[1,2]` accesses the same element as `fm[1001]`.
 
 ```{r}
 fm[1:4]
 fm[1001:1004]
 ```
+
 
 ### Row and column names
 
@@ -73,6 +75,9 @@ An existing filematrix can be opened with `fm.open`.
 fm = fm.open(filenamebase = 'fmatrix');
 ```
 
+
+#### !!!!! Readonly mode: Consider including an example of readonly mode to prevent overwriting of existing filematrices. !!!
+
 An existing filematrix that would fit in memory can be loaded fully with `fm.load`
 
 ```{r}
@@ -93,13 +98,14 @@ Thus, access to a filematrix values by columns is much faster than access by row
 ```{r}
 timecol = system.time( { sum(fm[ ,1:10]) } )[3]
 timerow = system.time( { sum(fm[1:10, ]) } )[3]
+### !!! Consider increasing number of cols/rows to get a non-zero value for the col example -- will be more informative. !!!
 cat('Reading ', nrow(fm)*10, ' values from 10 columns takes ', timecol, ' seconds', '\n',
     'Reading ', ncol(fm)*10, ' values from 10 rows takes ',    timerow, ' seconds', '\n', sep = '')
 ```
 
 ### Appending columns
 
-Unlike with regular R matrices, columns can be appended to the right side of a filematrix with very little overhead.
+Unlike with regular R matrices, columns can be appended to the right side of a filematrix with very little computational overhead.
 
 ```{r}
 dim(fm)
