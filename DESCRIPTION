@@ -16,4 +16,4 @@ License: LGPL-3
 Depends methods
 Imports: RSQLite
 VignetteBuilder: knitr
-Suggests: knitr
+Suggests: knitr, BiocStyle
