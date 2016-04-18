@@ -18,16 +18,16 @@
 		Depends: \tab methods \cr
 	}
 	
-	Interface for working with large matrices stored in files, not in computer memory.
+	Interface for working with large matrices from files in data storage, not held in computer memory.
      Supports multiple data types (double, integer, logical and raw) of different sizes (e.g. 4, 2, or 1 byte integers).
      Access to parts of the matrix is done by indexing, exactly as with usual R matrices.
      Supports very large matrices (tested on 1 terabyte matrix), allowing for more than 2^32 rows or columns.
-     Cross-platform as a pure R implementation. Not using memory mapped files or any explicit C code.
+     Cross-platform as a pure R implementation; does not rely on memory mapped files or any explicit C code.
 	
 	A new \code{file.matrix} object can be created with \code{\link{fm.create}} and \code{\link{fm.create.from.matrix}}. Existing \code{file.matrix} files can be opened with \code{\link{fm.open}}.
 	
-	Once a \code{file.matrix} is created it can be accessed as a regular \code{\link{matrix}} object in R.
-	All changes to \code{file.matrix} object are instantly recorded in the respective files.
+	Once a \code{file.matrix} is created or opened it can be accessed as a regular \code{\link{matrix}} object in R.
+	All changes to \code{file.matrix} object are instantly recorded in the respective files, unless \code{readonly} mode is specified.
 }
 \note{
 Due to lack of 64 bit integer data type in R, the package uses double values for calculation of indices. The precision of double data type is sufficient for indexing matrices up to 8,192 terabytes in size.
