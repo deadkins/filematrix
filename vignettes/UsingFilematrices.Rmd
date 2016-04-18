@@ -3,7 +3,7 @@ title: "Filematrix overview"
 author: "Andrey Shabalin"
 date: "`r Sys.Date()`"
 output: 
-  html_document:
+  BiocStyle::html_document:
     toc: true # table of content true
 vignette: >
   %\VignetteIndexEntry{Filematrix overview}
@@ -16,18 +16,18 @@ Using the object class `filematrix` one can create and access large matrices sto
 Filematrices can be as large as the storage allows. The package has been tested on matrices several terabytes in size.
 
 
-### Creating filematrices
+# Creating filematrices
 
 File matrices can be created using functions `fm.create`, `fm.create.from.matrix`, or `fm.create.from.text.file`:
 
 ```{r}
 suppressPackageStartupMessages( library(filematrix) )
-fm = fm.create(filenamebase = 'fmatrix', nrow = 1000, ncol = 1000, type = 'double')
+fm = fm.create(filenamebase = 'fmatrix', nrow = 5000, ncol = 5000, type = 'double')
 ```
 
 The code above creates two files: `fmatrix.bmat` which stores the filematrix values, and `fmatrix.desc.txt` which stores the filematrix information, such as filematrix dimensions, data type, and data type size.
 
-### Reading from and writing to a filematrix
+# Reading from and writing to a filematrix
 
 The elements of a filematrix can be read and changed using the same syntax as is used for regular R matrices.
 Any changes to a filematrix are **immediately** written to the `.bmat` file.
@@ -39,15 +39,15 @@ fm[1:4, 1:3]
 colSums(fm[,1:4])
 ```
 
-Elements of a filematrix can also be accessed as elements of a vector (in which elements proceed sequentially down columns stacked 1:n). Thus, as `fm` has 1000 rows, `fm[1,2]` accesses the same element as `fm[1001]`.
+Elements of a filematrix can also be accessed as elements of a vector (in which elements proceed sequentially down columns stacked 1:n). Thus, as `fm` has `5000` rows, `fm[1,2]` accesses the same element as `fm[5001]`.
 
 ```{r}
 fm[1:4]
-fm[1001:1004]
+fm[5001:5004]
 ```
 
 
-### Row and column names
+# Row and column names
 
 File matrices can also have row and column names, like regular R matrices.
 
@@ -58,7 +58,7 @@ rownames(fm) = paste0('Row',1:nrow(fm))
 
 The row and column names of the filematrix `fm` are stored in `fmatrix.nmsrow.txt` and `fmatrix.nmscol.txt` respectively.
 
-### Closing filematrices
+# Closing filematrices
 
 An open filematrix object can be closed with `close` function. This closes the internal file handle (connection).
 Closing filematrix objects is **optional**, changes **would not be lost** if the object is not closed.
@@ -67,16 +67,15 @@ Closing filematrix objects is **optional**, changes **would not be lost** if the
 close(fm)
 ```
 
-### Open or load an existing filematrix
+# Open or load an existing filematrix
 
 An existing filematrix can be opened with `fm.open`.
 
 ```{r}
-fm = fm.open(filenamebase = 'fmatrix');
+fm = fm.open(filenamebase = 'fmatrix', readonly = FALSE);
 ```
 
-
-#### !!!!! Readonly mode: Consider including an example of readonly mode to prevent overwriting of existing filematrices. !!!
+To prevent any changes to the values of the filematrix set `readonly = TRUE`.
 
 An existing filematrix that would fit in memory can be loaded fully with `fm.load`
 
@@ -84,8 +83,7 @@ An existing filematrix that would fit in memory can be loaded fully with `fm.loa
 mat = fm.load('fmatrix');
 ```
 
-
-### By column access is faster then by rows
+# By column access is faster then by rows
 
 The values of a filematrix are stored by columns, as with regular R matrices:
 
@@ -103,7 +101,7 @@ cat('Reading ', nrow(fm)*10, ' values from 10 columns takes ', timecol, ' second
     'Reading ', ncol(fm)*10, ' values from 10 rows takes ',    timerow, ' seconds', '\n', sep = '')
 ```
 
-### Appending columns
+# Appending columns
 
 Unlike with regular R matrices, columns can be appended to the right side of a filematrix with very little computational overhead.
 
@@ -116,7 +114,7 @@ fm[nrow(fm)+(-1:0), ncol(fm)+(-1:0)]
 
 ```
 
-### Deleting filematrix files
+# Deleting filematrix files
 
 If you no longer need a filematrix and want to delete its files from the hard drive and close the object,
 please use `closeAndDeleteFiles()`

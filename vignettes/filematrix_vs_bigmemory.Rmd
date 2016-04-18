@@ -2,7 +2,7 @@
 title: "Filematrix vs. bigmemory (packages)"
 author: "Andrey Shabalin"
 date: "`r Sys.Date()`"
-output: rmarkdown::html_vignette
+output: BiocStyle::html_document
 vignette: >
   %\VignetteIndexEntry{Filematrix vs. bigmemory (packages)}
   %\VignetteEngine{knitr::rmarkdown}

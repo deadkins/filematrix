@@ -13,6 +13,7 @@ Description: Interface for working with large matrices stored in files, not in c
 BugReports: https://github.com/andreyshabalin/filematrix/issues
 URL: https://github.com/andreyshabalin/filematrix
 License: LGPL-3
-Depends: methods, RSQLite
+Depends methods
+Imports: RSQLite
 VignetteBuilder: knitr
-Suggests: knitr
+Suggests: knitr, BiocStyle
